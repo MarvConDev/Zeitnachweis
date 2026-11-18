@@ -46,15 +46,34 @@ export function formatMinutesAsTime(totalMinutes: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-/** Dauer in Stunden; Nachtschicht (Ende vor Beginn) wird über Mitternacht gerechnet. */
-export function calculateDurationHours(start: string, end: string): number | null {
+/**
+ * Dauer in Stunden inkl. Sommer-/Winterzeit.
+ * Nutzt echte lokale Date-Timestamps, damit bei Zeitumstellung
+ * automatisch ±1 Stunde berücksichtigt wird.
+ */
+export function calculateDurationHours(
+  start: string,
+  end: string,
+  year?: number,
+  month?: number,
+  day?: number,
+): number | null {
   const startMin = parseTimeToMinutes(start);
   const endMin = parseTimeToMinutes(end);
   if (startMin === null || endMin === null) return null;
 
-  let diff = endMin - startMin;
-  if (diff <= 0) diff += 24 * 60;
-  return Math.round((diff / 60) * 100) / 100;
+  const y = year ?? new Date().getFullYear();
+  const m = month ?? new Date().getMonth() + 1;
+  const d = day ?? new Date().getDate();
+
+  const startDate = new Date(y, m - 1, d, Math.floor(startMin / 60), startMin % 60, 0, 0);
+  const endDate = new Date(y, m - 1, d, Math.floor(endMin / 60), endMin % 60, 0, 0);
+  if (endDate.getTime() <= startDate.getTime()) {
+    endDate.setDate(endDate.getDate() + 1);
+  }
+
+  const hours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+  return Math.round(hours * 100) / 100;
 }
 
 /**
@@ -77,7 +96,10 @@ export function sumDurations(days: { duration: number }[]): number {
   return Math.round(days.reduce((sum, day) => sum + (day.duration || 0), 0) * 100) / 100;
 }
 
-export function createEmptyDays(year: number, month: number) {
+export function createEmptyDays(
+  year: number,
+  month: number,
+): { day: number; start?: string; end?: string; duration: number; pause?: number; object?: string }[] {
   const count = daysInMonth(year, month);
   return Array.from({ length: count }, (_, index) => ({
     day: index + 1,

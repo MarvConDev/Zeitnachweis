@@ -20,16 +20,18 @@ export function OnboardingScreen({ navigation }: Props) {
   const styles = makeStyles(colors);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [personnelNumber, setPersonnelNumber] = useState('');
   const [error, setError] = useState('');
 
   async function onContinue() {
     if (!firstName.trim() || !lastName.trim()) {
-      setError('Bitte Vor- und Nachnamen eingeben.');
+      setError('Bitte fülle alle Pflichtfelder aus.');
       return;
     }
     await saveProfile({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
+      personnelNumber: personnelNumber.trim() || undefined,
     });
     navigation.replace('Home');
   }
@@ -43,27 +45,47 @@ export function OnboardingScreen({ navigation }: Props) {
         <Text style={styles.kicker}>Zeitnachweis</Text>
         <Text style={styles.title}>Wie heißt du?</Text>
         <Text style={styles.subtitle}>
-          Dein Name wird in jeden Stundenzettel übernommen (Format: Nachname, Vorname).
+          Dein Name wird in jeden Stundenzettel übernommen (Format: Name, Vorname).
+          {'\n'}Felder mit * sind Pflichtfelder.
         </Text>
 
-        <Text style={styles.label}>Vorname</Text>
+        <Text style={styles.label}>
+          Vorname <Text style={styles.required}>*</Text>
+        </Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, error && !firstName.trim() && styles.inputError]}
           value={firstName}
-          onChangeText={setFirstName}
-          placeholder="Marwin"
+          onChangeText={(value) => {
+            setFirstName(value);
+            if (error) setError('');
+          }}
+          placeholder="Vorname"
           placeholderTextColor={colors.muted}
           autoCapitalize="words"
         />
 
-        <Text style={styles.label}>Nachname</Text>
+        <Text style={styles.label}>
+          Name <Text style={styles.required}>*</Text>
+        </Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, error && !lastName.trim() && styles.inputError]}
           value={lastName}
-          onChangeText={setLastName}
-          placeholder="Deiter"
+          onChangeText={(value) => {
+            setLastName(value);
+            if (error) setError('');
+          }}
+          placeholder="Name"
           placeholderTextColor={colors.muted}
           autoCapitalize="words"
+        />
+
+        <Text style={styles.label}>Personalnummer</Text>
+        <TextInput
+          style={styles.input}
+          value={personnelNumber}
+          onChangeText={setPersonnelNumber}
+          placeholder="Optional"
+          placeholderTextColor={colors.muted}
         />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -115,6 +137,10 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontWeight: '600',
       marginBottom: 6,
     },
+    required: {
+      color: colors.danger,
+      fontWeight: '700',
+    },
     input: {
       borderWidth: 1,
       borderColor: colors.line,
@@ -125,6 +151,9 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontSize: 16,
       color: colors.ink,
       backgroundColor: colors.inputBg,
+    },
+    inputError: {
+      borderColor: colors.danger,
     },
     error: {
       color: colors.danger,

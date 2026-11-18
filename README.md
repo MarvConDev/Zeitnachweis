@@ -5,21 +5,19 @@ Android-App zum Ausfüllen von Stundenzetteln im Stil der Excel-Vorlage
 
 ## Funktionen
 
-- Beim ersten Start: Vor- und Nachname abfragen
+- Beim ersten Start: Vorname* / Name* (Pflichtfelder)
 - Liste aller erstellten Zeitnachweise
 - Neuen Zeitnachweis anlegen (Name + aktuelles Jahr vorausgefüllt, Monat wählen)
 - Ansehen der Monatstabelle
-- Bearbeiten über eine einfache Maske: Datum, Beginn, Ende, Objekt/Verantsaltung, Verwerfen/Speichern
-- Dauer wird automatisch berechnet (auch Nachtschichten über Mitternacht)
-- Pause automatisch:
-  - unter 10 Stunden → **0,5**
-  - ab 10 Stunden → **0,75**
-- Monatssumme wird automatisch addiert
-- PDF herunterladen / teilen
+- Bearbeiten: Datum, Beginn, Ende, Objekt/Veranstaltung, Verwerfen/Speichern
+- Objekt-Vorschläge aus zuletzt genutzten Orten
+- Tag leeren (mit Bestätigung)
+- Dauer + Pause automatisch (`<10h → 0,5` / `≥10h → 0,75`)
+- PDF speichern/teilen (Logo, eine Seite)
+- Einstellungen: Name, Dark Mode, Backup/Restore, Versionsnummer
+- Daten bleiben bei App-Updates erhalten (Package `de.zeitnachweis.app`)
 
-## Start auf dem Handy
-
-Voraussetzung: [Node.js](https://nodejs.org/) und die App **Expo Go** aus dem Play Store (SDK 58).
+## Start mit Expo Go
 
 ```bash
 cd C:\Users\mdeit\Coding\zeitnachweis
@@ -27,27 +25,46 @@ npm install
 npm start
 ```
 
-`npm start` nutzt **Tunnel-Modus** (`--tunnel ngrok`). Das Handy muss **nicht** im gleichen WLAN sein – wichtig gegen den Fehler `failed to download remote update`.
+1. Bis „Tunnel ready“ warten  
+2. Expo Go **SDK 58** → QR / `exp://…exp.direct`  
+3. Bei Problemen: Expo Go neu starten  
 
-1. Am PC: `npm start` laufen lassen, bis „Tunnel ready“ erscheint  
-2. Expo Go muss **SDK 58** sein (wie dieses Projekt)  
-3. In **Expo Go** den QR-Code scannen (oder die `exp://…exp.direct`-URL öffnen)  
-4. Bei Problemen: Expo Go komplett schließen, nochmal scannen  
+Nur LAN: `npm run start:lan`
 
-Nur im gleichen WLAN (ohne Tunnel): `npm run start:lan`
+## Fertige APK / AAB bauen (EAS)
 
-## Eigene APK bauen (optional)
-
-Mit einem Expo-Account:
+1. Expo-Account anlegen: https://expo.dev/signup  
+2. Einloggen und Projekt verknüpfen:
 
 ```bash
 npx eas-cli login
-npx eas build -p android --profile preview
+npx eas-cli build:configure
 ```
+
+3. Builds starten:
+
+```bash
+# APK zum direkten Installieren auf dem Handy
+npm run build:apk
+
+# AAB für Google Play
+npm run build:aab
+```
+
+Nach dem Build: Download-Link in der Konsole / auf https://expo.dev/accounts/matvcondev/projects/zeitnachweis
+
+**Release 1.0.0 (Build 1):**
+- APK: https://expo.dev/artifacts/eas/S0kv1WkAaQErYgKjbwktkXjjGPaSS6mvvWuwSQ0bxw8.apk
+- AAB: https://expo.dev/artifacts/eas/bsVUNZzCOg7fniqGdfXsq9O8h_XxuGn1ylJ5faasYpQ.aab
+
+APK auf dem Handy installieren: Datei öffnen → „Unbekannte Apps“ erlauben falls gefragt.
+
+**Wichtig für Updates:** `android.package` (`de.zeitnachweis.app`) und Signatur nicht ändern – sonst gehen die lokalen Daten verloren. Vor großen Änderungen zusätzlich Backup in den Einstellungen.
 
 ## Projektstruktur
 
-- `src/screens` – Onboarding, Liste, Detail, Eintragsmaske
+- `src/screens` – UI-Screens
 - `src/utils/time.ts` – Dauer-/Pausenlogik
-- `src/pdf.ts` – PDF im Stundenzettel-Layout
-- `src/storage.ts` – lokale Speicherung auf dem Gerät
+- `src/pdf.ts` – PDF-Export
+- `src/storage.ts` / `src/backup.ts` – lokale Daten + Backup
+- `eas.json` – Build-Profile (preview=APK, production=AAB)

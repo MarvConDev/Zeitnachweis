@@ -2,21 +2,21 @@
   "expo": {
     "name": "Zeitnachweis",
     "slug": "zeitnachweis",
-    "version": "1.0.0",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "de.zeitnachweis.app"
+      "bundleIdentifier": "de.zeitnachweis.app",
+      "buildNumber": "4"
     },
     "android": {
       "package": "de.zeitnachweis.app",
+      "versionCode": 4,
       "adaptiveIcon": {
-        "backgroundColor": "#1E3A8A",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       }
     },
     "web": {
@@ -28,12 +28,20 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
+          "image": "./assets/icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#1E3A8A"
+          "backgroundColor": "#000000",
+          "imageWidth": 180
         }
       ],
-      "expo-status-bar"
-    ]
+      "expo-status-bar",
+      "expo-document-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fe7433eb-87cb-46cf-b15c-a57fd7aa36ab"
+      }
+    },
+    "owner": "matvcondev"
   }
 }

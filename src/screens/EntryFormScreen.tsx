@@ -16,7 +16,13 @@ import DateTimePicker, {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ThemeContext';
-import { getTimesheet, upsertTimesheet } from '../storage';
+import {
+  getTimesheet,
+  loadRecentObjects,
+  loadSettings,
+  rememberObject,
+  upsertTimesheet,
+} from '../storage';
 import type { DayEntry, RootStackParamList } from '../types';
 import {
   MONTH_NAMES,
@@ -44,6 +50,55 @@ function timeStringToDate(value: string, fallbackHour: number): Date {
   return date;
 }
 
+function emptyDay(day: number): DayEntry {
+  return { day, duration: 0 };
+}
+
+function formatDay(day: number, month: number, year: number): string {
+  return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`;
+}
+
+function buildEntryForDay(
+  dayNumber: number,
+  year: number,
+  month: number,
+  start: string,
+  end: string,
+  objectText: string,
+): DayEntry | null {
+  const startTrim = start.trim();
+  const endTrim = end.trim();
+  const objectTrim = objectText.trim();
+
+  if (!objectTrim && !(startTrim && endTrim)) {
+    return null;
+  }
+
+  let duration = 0;
+  let pause: number | undefined;
+
+  if (startTrim || endTrim) {
+    if (!(startTrim && endTrim)) {
+      return null;
+    }
+    const calculated = calculateDurationHours(startTrim, endTrim, year, month, dayNumber);
+    if (calculated === null) {
+      return null;
+    }
+    duration = calculated;
+    pause = calculatePause(duration);
+  }
+
+  return {
+    day: dayNumber,
+    start: startTrim || undefined,
+    end: endTrim || undefined,
+    duration,
+    pause,
+    object: objectTrim || undefined,
+  };
+}
+
 export function EntryFormScreen({ navigation, route }: Props) {
   const { timesheetId, day: initialDay } = route.params;
   const { colors } = useTheme();
@@ -52,17 +107,26 @@ export function EntryFormScreen({ navigation, route }: Props) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [day, setDay] = useState(initialDay ?? new Date().getDate());
-  const [start, setStart] = useState('08:00');
-  const [end, setEnd] = useState('16:00');
+  const [dayEnd, setDayEnd] = useState(initialDay ?? new Date().getDate());
+  const [daysInMonth, setDaysInMonth] = useState(31);
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
   const [objectText, setObjectText] = useState('');
+  const [recentObjects, setRecentObjects] = useState<string[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [ready, setReady] = useState(false);
+  const [hasExistingEntry, setHasExistingEntry] = useState(false);
 
   useEffect(() => {
     void (async () => {
-      const timesheet = await getTimesheet(timesheetId);
+      const [timesheet, recent, settings] = await Promise.all([
+        getTimesheet(timesheetId),
+        loadRecentObjects(),
+        loadSettings(),
+      ]);
       if (!timesheet) {
         Alert.alert('Fehler', 'Zeitnachweis nicht gefunden.');
         navigation.goBack();
@@ -71,27 +135,57 @@ export function EntryFormScreen({ navigation, route }: Props) {
 
       setYear(timesheet.year);
       setMonth(timesheet.month);
+      setDaysInMonth(timesheet.days.length);
+      setRecentObjects(recent);
 
       const dayNumber =
         initialDay && initialDay <= timesheet.days.length
           ? initialDay
           : Math.min(new Date().getDate(), timesheet.days.length);
       setDay(dayNumber);
+      setDayEnd(dayNumber);
 
       const existing = timesheet.days.find((item) => item.day === dayNumber);
-      if (existing?.start) setStart(existing.start);
-      if (existing?.end) setEnd(existing.end);
-      if (existing?.object) setObjectText(existing.object);
+      const filled = Boolean(
+        existing && (existing.start || existing.end || existing.object || existing.duration),
+      );
+      setHasExistingEntry(filled);
+
+      if (filled) {
+        setStart(existing?.start ?? '');
+        setEnd(existing?.end ?? '');
+        setObjectText(existing?.object ?? '');
+      } else if (settings.fixedWorkTimes.enabled) {
+        setStart(settings.fixedWorkTimes.start);
+        setEnd(settings.fixedWorkTimes.end);
+        setObjectText('');
+      } else {
+        setStart('');
+        setEnd('');
+        setObjectText('');
+      }
       setReady(true);
     })();
   }, [initialDay, navigation, timesheetId]);
+
+  const rangeFrom = Math.min(day, dayEnd);
+  const rangeTo = Math.max(day, dayEnd);
+  const isRange = rangeTo > rangeFrom;
+
+  const filteredSuggestions = useMemo(() => {
+    const query = objectText.trim().toLowerCase();
+    if (!query) return recentObjects.slice(0, 8);
+    return recentObjects
+      .filter((item) => item.toLowerCase().includes(query) && item.toLowerCase() !== query)
+      .slice(0, 8);
+  }, [objectText, recentObjects]);
 
   const preview = useMemo(() => {
     const hasTimes = Boolean(start.trim() && end.trim());
     if (!hasTimes) {
       return { duration: 0, pause: undefined as number | undefined, valid: true };
     }
-    const duration = calculateDurationHours(start, end);
+    const duration = calculateDurationHours(start, end, year, month, day);
     if (duration === null) {
       return { duration: 0, pause: undefined, valid: false };
     }
@@ -100,9 +194,9 @@ export function EntryFormScreen({ navigation, route }: Props) {
       pause: calculatePause(duration),
       valid: true,
     };
-  }, [start, end]);
+  }, [start, end, year, month, day]);
 
-  function onDateChange(_event: DateTimePickerEvent, selected?: Date) {
+  function onStartDateChange(_event: DateTimePickerEvent, selected?: Date) {
     setShowDatePicker(Platform.OS === 'ios');
     if (!selected) return;
     if (selected.getFullYear() !== year || selected.getMonth() + 1 !== month) {
@@ -112,7 +206,28 @@ export function EntryFormScreen({ navigation, route }: Props) {
       );
       return;
     }
-    setDay(selected.getDate());
+    const nextDay = selected.getDate();
+    setDay(nextDay);
+    if (dayEnd < nextDay) {
+      setDayEnd(nextDay);
+    }
+  }
+
+  function onEndDateChange(_event: DateTimePickerEvent, selected?: Date) {
+    setShowEndDatePicker(Platform.OS === 'ios');
+    if (!selected) return;
+    if (selected.getFullYear() !== year || selected.getMonth() + 1 !== month) {
+      Alert.alert(
+        'Falscher Monat',
+        `Bitte ein Datum in ${MONTH_NAMES[month - 1]} ${year} wählen.`,
+      );
+      return;
+    }
+    const nextDay = selected.getDate();
+    setDayEnd(nextDay);
+    if (nextDay < day) {
+      setDay(nextDay);
+    }
   }
 
   function onStartChange(_event: DateTimePickerEvent, selected?: Date) {
@@ -127,6 +242,32 @@ export function EntryFormScreen({ navigation, route }: Props) {
     setEnd(formatMinutesAsTime(selected.getHours() * 60 + selected.getMinutes()));
   }
 
+  async function saveRange(from: number, to: number) {
+    const timesheet = await getTimesheet(timesheetId);
+    if (!timesheet) return;
+
+    const entries: DayEntry[] = [];
+    for (let d = from; d <= to; d += 1) {
+      const entry = buildEntryForDay(d, year, month, start, end, objectText);
+      if (!entry) {
+        Alert.alert('Ungültige Zeit', 'Bitte Beginn und Ende als HH:MM eingeben.');
+        return;
+      }
+      entries.push(entry);
+    }
+
+    const byDay = new Map(entries.map((item) => [item.day, item]));
+    timesheet.days = timesheet.days.map((item) => byDay.get(item.day) ?? item);
+    timesheet.updatedAt = new Date().toISOString();
+    await upsertTimesheet(timesheet);
+
+    const objectValue = objectText.trim();
+    if (objectValue) {
+      await rememberObject(objectValue);
+    }
+    navigation.goBack();
+  }
+
   async function onSave() {
     if (!objectText.trim() && !(start.trim() && end.trim())) {
       Alert.alert('Eingabe fehlt', 'Bitte Zeiten und/oder Objekt/Veranstaltung eintragen.');
@@ -138,27 +279,62 @@ export function EntryFormScreen({ navigation, route }: Props) {
       return;
     }
 
-    const timesheet = await getTimesheet(timesheetId);
-    if (!timesheet) return;
+    const from = rangeFrom;
+    const to = rangeTo;
 
-    const entry: DayEntry = {
-      day,
-      start: start.trim() || undefined,
-      end: end.trim() || undefined,
-      duration: preview.duration,
-      pause: preview.pause,
-      object: objectText.trim() || undefined,
-    };
+    if (to > from) {
+      const timesheet = await getTimesheet(timesheetId);
+      if (!timesheet) return;
+      const overlapping = timesheet.days.filter((item) => {
+        if (item.day < from || item.day > to) return false;
+        return Boolean(item.start || item.end || item.object || item.duration);
+      });
 
-    if (!entry.start && !entry.end) {
-      entry.duration = 0;
-      entry.pause = undefined;
+      if (overlapping.length > 0) {
+        Alert.alert(
+          'Zeitraum überschreibt Einträge',
+          `${overlapping.length} bereits ausgefüllte Tage werden überschrieben (${formatDay(from, month, year)} – ${formatDay(to, month, year)}).`,
+          [
+            { text: 'Abbrechen', style: 'cancel' },
+            {
+              text: 'Überschreiben',
+              style: 'destructive',
+              onPress: () => {
+                void saveRange(from, to);
+              },
+            },
+          ],
+        );
+        return;
+      }
     }
 
-    timesheet.days = timesheet.days.map((item) => (item.day === day ? entry : item));
-    timesheet.updatedAt = new Date().toISOString();
-    await upsertTimesheet(timesheet);
-    navigation.goBack();
+    await saveRange(from, to);
+  }
+
+  function onClearDay() {
+    const label = isRange
+      ? `Einträge vom ${formatDay(rangeFrom, month, year)} bis ${formatDay(rangeTo, month, year)}`
+      : `Eintrag für Tag ${day}`;
+    Alert.alert('Wirklich leeren?', `${label} wird gelöscht.`, [
+      { text: 'Abbrechen', style: 'cancel' },
+      {
+        text: 'Leeren',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const timesheet = await getTimesheet(timesheetId);
+            if (!timesheet) return;
+            timesheet.days = timesheet.days.map((item) =>
+              item.day >= rangeFrom && item.day <= rangeTo ? emptyDay(item.day) : item,
+            );
+            timesheet.updatedAt = new Date().toISOString();
+            await upsertTimesheet(timesheet);
+            navigation.goBack();
+          })();
+        },
+      },
+    ]);
   }
 
   if (!ready) {
@@ -180,15 +356,23 @@ export function EntryFormScreen({ navigation, route }: Props) {
         <View style={styles.card}>
           <Text style={styles.title}>Eintrag bearbeiten</Text>
           <Text style={styles.subtitle}>
-            {MONTH_NAMES[month - 1]} {year} · Dauer und Pause werden automatisch berechnet
+            {MONTH_NAMES[month - 1]} {year} · Dauer inkl. Zeitumstellung · Pause automatisch
           </Text>
 
-          <Text style={styles.label}>Datum</Text>
+          <Text style={styles.label}>Von</Text>
           <Pressable style={styles.selector} onPress={() => setShowDatePicker(true)}>
-            <Text style={styles.selectorText}>
-              {String(day).padStart(2, '0')}.{String(month).padStart(2, '0')}.{year}
-            </Text>
+            <Text style={styles.selectorText}>{formatDay(day, month, year)}</Text>
           </Pressable>
+
+          <Text style={styles.label}>Bis (optional für Zeitraum)</Text>
+          <Pressable style={styles.selector} onPress={() => setShowEndDatePicker(true)}>
+            <Text style={styles.selectorText}>{formatDay(dayEnd, month, year)}</Text>
+          </Pressable>
+          <Text style={styles.hint}>
+            {isRange
+              ? `Gleicher Eintrag für ${rangeTo - rangeFrom + 1} Tage (${formatDay(rangeFrom, month, year)} – ${formatDay(rangeTo, month, year)})`
+              : 'Für mehrere Tage: anderes „Bis“-Datum wählen (z. B. 01.–04.).'}
+          </Text>
 
           <Text style={styles.label}>Beginn</Text>
           <View style={styles.rowField}>
@@ -196,10 +380,15 @@ export function EntryFormScreen({ navigation, route }: Props) {
               style={[styles.input, styles.flexInput]}
               value={start}
               onChangeText={setStart}
-              placeholder="08:00"
+              placeholder="Beginn"
               placeholderTextColor={colors.muted}
               keyboardType="numbers-and-punctuation"
             />
+            {start ? (
+              <Pressable style={styles.pickBtn} onPress={() => setStart('')}>
+                <Text style={styles.pickBtnText}>Leer</Text>
+              </Pressable>
+            ) : null}
             <Pressable style={styles.pickBtn} onPress={() => setShowStartPicker(true)}>
               <Text style={styles.pickBtnText}>Uhr</Text>
             </Pressable>
@@ -211,28 +400,44 @@ export function EntryFormScreen({ navigation, route }: Props) {
               style={[styles.input, styles.flexInput]}
               value={end}
               onChangeText={setEnd}
-              placeholder="16:00"
+              placeholder="Ende"
               placeholderTextColor={colors.muted}
               keyboardType="numbers-and-punctuation"
             />
+            {end ? (
+              <Pressable style={styles.pickBtn} onPress={() => setEnd('')}>
+                <Text style={styles.pickBtnText}>Leer</Text>
+              </Pressable>
+            ) : null}
             <Pressable style={styles.pickBtn} onPress={() => setShowEndPicker(true)}>
               <Text style={styles.pickBtnText}>Uhr</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.label}>Objekt/Verantsaltung</Text>
+          <Text style={styles.label}>Objekt/Veranstaltung</Text>
           <TextInput
             style={[styles.input, styles.multiline]}
             value={objectText}
             onChangeText={setObjectText}
-            placeholder="z. B. Männerwohnheim"
+            placeholder="Objekt/Veranstaltung"
             placeholderTextColor={colors.muted}
             multiline
           />
 
+          {filteredSuggestions.length > 0 ? (
+            <View style={styles.suggestions}>
+              {filteredSuggestions.map((item) => (
+                <Pressable key={item} style={styles.chip} onPress={() => setObjectText(item)}>
+                  <Text style={styles.chipText}>{item}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           <View style={styles.preview}>
             <Text style={styles.previewText}>
               Dauer: {preview.valid ? `${formatHours(preview.duration)} h` : 'ungültig'}
+              {isRange ? ' (pro Tag)' : ''}
             </Text>
             <Text style={styles.previewText}>
               Pause:{' '}
@@ -244,10 +449,20 @@ export function EntryFormScreen({ navigation, route }: Props) {
             <Pressable style={styles.secondaryBtn} onPress={() => navigation.goBack()}>
               <Text style={styles.secondaryBtnText}>Verwerfen</Text>
             </Pressable>
-            <Pressable style={styles.primaryBtn} onPress={onSave}>
-              <Text style={styles.primaryBtnText}>Speichern</Text>
+            <Pressable style={styles.primaryBtn} onPress={() => void onSave()}>
+              <Text style={styles.primaryBtnText}>
+                {isRange ? `${rangeTo - rangeFrom + 1} Tage speichern` : 'Speichern'}
+              </Text>
             </Pressable>
           </View>
+
+          {hasExistingEntry || isRange ? (
+            <Pressable style={styles.dangerBtn} onPress={onClearDay}>
+              <Text style={styles.dangerBtnText}>
+                {isRange ? 'Zeitraum leeren' : 'Tag leeren'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -256,9 +471,19 @@ export function EntryFormScreen({ navigation, route }: Props) {
           value={dateFromParts(year, month, day)}
           mode="date"
           display="default"
-          onChange={onDateChange}
+          onChange={onStartDateChange}
           minimumDate={dateFromParts(year, month, 1)}
-          maximumDate={dateFromParts(year, month, new Date(year, month, 0).getDate())}
+          maximumDate={dateFromParts(year, month, daysInMonth)}
+        />
+      ) : null}
+      {showEndDatePicker ? (
+        <DateTimePicker
+          value={dateFromParts(year, month, dayEnd)}
+          mode="date"
+          display="default"
+          onChange={onEndDateChange}
+          minimumDate={dateFromParts(year, month, 1)}
+          maximumDate={dateFromParts(year, month, daysInMonth)}
         />
       ) : null}
       {showStartPicker ? (
@@ -285,15 +510,8 @@ export function EntryFormScreen({ navigation, route }: Props) {
 
 function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
-    root: {
-      flex: 1,
-      backgroundColor: colors.bg,
-    },
-    scrollContent: {
-      padding: 16,
-      flexGrow: 1,
-      justifyContent: 'center',
-    },
+    root: { flex: 1, backgroundColor: colors.bg },
+    scrollContent: { padding: 16, flexGrow: 1, justifyContent: 'center' },
     card: {
       backgroundColor: colors.surface,
       borderRadius: 16,
@@ -304,6 +522,7 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
     title: { fontSize: 22, fontWeight: '700', color: colors.ink },
     subtitle: { color: colors.muted, marginTop: 6, marginBottom: 16, lineHeight: 20 },
     label: { fontWeight: '600', color: colors.ink, marginBottom: 6, marginTop: 4 },
+    hint: { color: colors.muted, fontSize: 13, lineHeight: 18, marginBottom: 10, marginTop: -2 },
     selector: {
       borderWidth: 1,
       borderColor: colors.line,
@@ -337,6 +556,22 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       backgroundColor: colors.inputBg,
     },
     multiline: { minHeight: 72, textAlignVertical: 'top' },
+    suggestions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 10,
+      marginTop: -2,
+    },
+    chip: {
+      backgroundColor: colors.accentSoft,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    chipText: { color: colors.accent, fontWeight: '600', fontSize: 13 },
     preview: {
       backgroundColor: colors.previewBg,
       borderRadius: 10,
@@ -364,5 +599,15 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       alignItems: 'center',
     },
     primaryBtnText: { color: '#fff', fontWeight: '700' },
+    dangerBtn: {
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.dangerSoft,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    dangerBtnText: { color: colors.danger, fontWeight: '700' },
   });
 }

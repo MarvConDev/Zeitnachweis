@@ -25,7 +25,10 @@ function safeFileName(name: string): string {
   return name.replace(/[^\w.\-]+/g, '_');
 }
 
-export function buildTimesheetHtml(timesheet: Timesheet): string {
+export function buildTimesheetHtml(
+  timesheet: Timesheet,
+  personnelNumber?: string,
+): string {
   const monthName = MONTH_NAMES[timesheet.month - 1];
   const total = sumDurations(timesheet.days);
   const rows = timesheet.days
@@ -152,7 +155,7 @@ export function buildTimesheetHtml(timesheet: Timesheet): string {
     </tr>
     <tr>
       <td class="label">Pers.-Nr.:</td>
-      <td class="value"></td>
+      <td class="value">${personnelNumber ? escapeHtml(personnelNumber) : ''}</td>
     </tr>
   </table>
 
@@ -204,7 +207,7 @@ async function prepareTimesheetPdf(timesheet: Timesheet): Promise<PreparedPdf> {
 
   const displayName = `${baseName}.pdf`;
   const fileName = `${safeFileName(baseName)}.pdf`;
-  const html = buildTimesheetHtml(timesheet);
+  const html = buildTimesheetHtml(timesheet, profile?.personnelNumber);
 
   // Base64 erzeugen und selbst in den App-Speicher schreiben —
   // so vermeiden wir READ-Permission-Fehler auf dem Temp-Pfad von printToFileAsync.

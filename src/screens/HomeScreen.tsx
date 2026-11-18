@@ -17,10 +17,16 @@ import { useTheme } from '../ThemeContext';
 import {
   deleteTimesheet,
   loadProfile,
+  loadSettings,
   loadTimesheets,
   upsertTimesheet,
 } from '../storage';
-import type { RootStackParamList, Timesheet, UserProfile } from '../types';
+import type {
+  AppSettings,
+  RootStackParamList,
+  Timesheet,
+  UserProfile,
+} from '../types';
 import {
   MONTH_NAMES,
   createEmptyDays,
@@ -35,18 +41,21 @@ export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear] = useState(new Date().getFullYear());
 
   const refresh = useCallback(async () => {
-    const [nextProfile, nextTimesheets] = await Promise.all([
+    const [nextProfile, nextTimesheets, nextSettings] = await Promise.all([
       loadProfile(),
       loadTimesheets(),
+      loadSettings(),
     ]);
     setProfile(nextProfile);
     setTimesheets(nextTimesheets);
+    setSettings(nextSettings);
   }, []);
 
   useFocusEffect(
@@ -61,7 +70,7 @@ export function HomeScreen({ navigation }: Props) {
     const exists = timesheets.some(
       (item) => item.year === selectedYear && item.month === selectedMonth,
     );
-    if (exists) {
+    if (exists && !settings?.debug.allowDuplicateMonths) {
       Alert.alert(
         'Bereits vorhanden',
         `Für ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear} gibt es schon einen Zeitnachweis.`,
@@ -103,6 +112,8 @@ export function HomeScreen({ navigation }: Props) {
   const statusBarHeight =
     Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0;
   const headerTop = Math.max(insets.top, statusBarHeight, 24) + 14;
+  const minHoursEnabled = Boolean(settings?.minimumHours.enabled);
+  const minHours = settings?.minimumHours.hours ?? 0;
 
   return (
     <View style={styles.root}>
@@ -133,6 +144,7 @@ export function HomeScreen({ navigation }: Props) {
         renderItem={({ item }) => {
           const title = `${MONTH_NAMES[item.month - 1]} ${item.year}`;
           const hours = sumDurations(item.days);
+          const hoursOk = !minHoursEnabled || hours >= minHours;
           return (
             <Pressable
               style={styles.card}
@@ -141,10 +153,24 @@ export function HomeScreen({ navigation }: Props) {
             >
               <View style={styles.cardTop}>
                 <Text style={styles.cardTitle}>{title}</Text>
-                <Text style={styles.cardHours}>{String(hours).replace('.', ',')} h</Text>
+                <Text
+                  style={[
+                    styles.cardHours,
+                    minHoursEnabled && (hoursOk ? styles.cardHoursOk : styles.cardHoursBad),
+                  ]}
+                >
+                  {String(hours).replace('.', ',')} h
+                </Text>
               </View>
               <Text style={styles.cardName}>{item.employeeName}</Text>
-              <Text style={styles.cardHint}>Tippen zum Ansehen · Lang drücken zum Löschen</Text>
+              {minHoursEnabled ? (
+                <Text style={styles.cardHint}>
+                  Soll: {String(minHours).replace('.', ',')} h ·{' '}
+                  {hoursOk ? 'Ziel erreicht' : 'Noch unter Soll'}
+                </Text>
+              ) : (
+                <Text style={styles.cardHint}>Tippen zum Ansehen · Lang drücken zum Löschen</Text>
+              )}
             </Pressable>
           );
         }}
@@ -247,6 +273,14 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       paddingVertical: 4,
       borderRadius: 999,
       overflow: 'hidden',
+    },
+    cardHoursOk: {
+      backgroundColor: '#DCFCE7',
+      color: '#166534',
+    },
+    cardHoursBad: {
+      backgroundColor: '#FEE2E2',
+      color: '#991B1B',
     },
     cardName: { color: colors.muted, marginTop: 6 },
     cardHint: { color: colors.muted, fontSize: 12, marginTop: 10, opacity: 0.8 },
