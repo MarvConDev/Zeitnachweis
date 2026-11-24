@@ -40,6 +40,7 @@ export type DebugSettings = {
 
 export type AppSettings = {
   darkMode: boolean;
+  showWeekdayLabels: boolean;
   fixedWorkTimes: FixedWorkTimes;
   minimumHours: MinimumHoursSettings;
   debug: DebugSettings;

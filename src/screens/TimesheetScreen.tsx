@@ -7,34 +7,44 @@ import {
   Text,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ZoomablePanView } from '../components/ZoomablePanView';
 import { useTheme } from '../ThemeContext';
 import { saveTimesheetPdf, shareTimesheetPdf } from '../pdf';
-import { getTimesheet, loadProfile } from '../storage';
+import { getTimesheet, loadProfile, loadSettings } from '../storage';
 import type { RootStackParamList, Timesheet } from '../types';
-import { MONTH_NAMES, formatHours, sumDurations } from '../utils/time';
+import { MONTH_NAMES, formatHours, sumDurations, weekdayShort } from '../utils/time';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Timesheet'>;
 
-/** Feste Spaltenbreiten: Tag+Beginn+Ende+Dauer+Pause+Objekt */
-const TABLE_WIDTH = 48 + 68 + 68 + 62 + 62 + 192;
+const DAY_COL_NARROW = 48;
+const DAY_COL_WIDE = 72;
+const TIME_COL = 68;
+const NUM_COL = 62;
+const OBJ_COL = 192;
 
 export function TimesheetScreen({ navigation, route }: Props) {
   const { id } = route.params;
-  const { colors } = useTheme();
+  const { colors, darkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const [timesheet, setTimesheet] = useState<Timesheet | null>(null);
   const [personnelNumber, setPersonnelNumber] = useState('');
+  const [showWeekdayLabels, setShowWeekdayLabels] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const styles = makeStyles(colors);
+  const styles = makeStyles(colors, showWeekdayLabels);
 
   const refresh = useCallback(async () => {
-    const [next, profile] = await Promise.all([getTimesheet(id), loadProfile()]);
+    const [next, profile, settings] = await Promise.all([
+      getTimesheet(id),
+      loadProfile(),
+      loadSettings(),
+    ]);
     setTimesheet(next);
     setPersonnelNumber(profile?.personnelNumber ?? '');
+    setShowWeekdayLabels(settings.showWeekdayLabels);
   }, [id]);
 
   useFocusEffect(
@@ -88,6 +98,14 @@ export function TimesheetScreen({ navigation, route }: Props) {
 
   const total = sumDurations(timesheet.days);
   const bottomPad = Math.max(insets.bottom, 12);
+  const now = new Date();
+  const todayDay =
+    now.getFullYear() === timesheet.year && now.getMonth() + 1 === timesheet.month
+      ? now.getDate()
+      : null;
+  const todayGradient = darkMode
+    ? (['rgba(59,130,246,0.45)', 'rgba(59,130,246,0)'] as const)
+    : (['#BFDBFE', 'rgba(191,219,254,0)'] as const);
 
   return (
     <View style={styles.root}>
@@ -120,10 +138,14 @@ export function TimesheetScreen({ navigation, route }: Props) {
           </View>
           {timesheet.days.map((day) => {
             const filled = Boolean(day.start || day.end || day.object);
+            const isToday = todayDay === day.day;
+            const dayLabel = showWeekdayLabels
+              ? `${weekdayShort(timesheet.year, timesheet.month, day.day)} ${day.day}`
+              : String(day.day);
             return (
               <Pressable
                 key={day.day}
-                style={[styles.row, filled && styles.rowFilled]}
+                style={[styles.row, filled && !isToday && styles.rowFilled]}
                 onPress={() =>
                   navigation.navigate('EntryForm', {
                     timesheetId: timesheet.id,
@@ -131,7 +153,17 @@ export function TimesheetScreen({ navigation, route }: Props) {
                   })
                 }
               >
-                <Text style={[styles.cell, styles.dayCol]}>{day.day}</Text>
+                {isToday ? (
+                  <LinearGradient
+                    colors={todayGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.todayGradient}
+                  />
+                ) : null}
+                <Text style={[styles.cell, styles.dayCol, isToday && styles.todayText]}>
+                  {dayLabel}
+                </Text>
                 <Text style={[styles.cell, styles.timeCol]}>{day.start ?? ''}</Text>
                 <Text style={[styles.cell, styles.timeCol]}>{day.end ?? ''}</Text>
                 <Text style={[styles.cell, styles.numCol]}>
@@ -166,7 +198,13 @@ export function TimesheetScreen({ navigation, route }: Props) {
   );
 }
 
-function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
+function makeStyles(
+  colors: ReturnType<typeof useTheme>['colors'],
+  showWeekdayLabels: boolean,
+) {
+  const dayColWidth = showWeekdayLabels ? DAY_COL_WIDE : DAY_COL_NARROW;
+  const tableWidth = dayColWidth + TIME_COL + TIME_COL + NUM_COL + NUM_COL + OBJ_COL;
+
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -189,7 +227,7 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     zoomHint: { marginTop: 8, color: colors.muted, fontSize: 12 },
     tableWrap: {
-      width: TABLE_WIDTH,
+      width: tableWidth,
       borderWidth: 1,
       borderColor: colors.line,
       backgroundColor: colors.surface,
@@ -197,10 +235,15 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
     },
     row: {
       flexDirection: 'row',
-      width: TABLE_WIDTH,
+      width: tableWidth,
       borderBottomWidth: 1,
       borderColor: colors.line,
       backgroundColor: colors.surface,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    todayGradient: {
+      ...StyleSheet.absoluteFill,
     },
     headRow: { backgroundColor: colors.tableHead },
     rowFilled: { backgroundColor: colors.rowFilled },
@@ -211,12 +254,15 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontSize: 13,
       borderRightWidth: 1,
       borderColor: colors.line,
+      backgroundColor: 'transparent',
+      zIndex: 1,
     },
+    todayText: { fontWeight: '700', color: colors.accent },
     head: { fontWeight: '700', fontSize: 12 },
-    dayCol: { width: 48, textAlign: 'center' },
-    timeCol: { width: 68, textAlign: 'center' },
-    numCol: { width: 62, textAlign: 'center' },
-    objCol: { width: 192, borderRightWidth: 0 },
+    dayCol: { width: dayColWidth, textAlign: 'center' },
+    timeCol: { width: TIME_COL, textAlign: 'center' },
+    numCol: { width: NUM_COL, textAlign: 'center' },
+    objCol: { width: OBJ_COL, borderRightWidth: 0 },
     actions: {
       flexDirection: 'row',
       gap: 10,

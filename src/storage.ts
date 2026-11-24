@@ -33,6 +33,7 @@ const DEFAULT_DEBUG: DebugSettings = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   darkMode: false,
+  showWeekdayLabels: false,
   fixedWorkTimes: DEFAULT_FIXED_WORK_TIMES,
   minimumHours: DEFAULT_MINIMUM_HOURS,
   debug: DEFAULT_DEBUG,
@@ -44,6 +45,7 @@ const BACKUP_FORMAT_VERSION = 1;
 function normalizeSettings(raw: Partial<AppSettings> | null | undefined): AppSettings {
   return {
     darkMode: Boolean(raw?.darkMode),
+    showWeekdayLabels: Boolean(raw?.showWeekdayLabels),
     fixedWorkTimes: {
       ...DEFAULT_FIXED_WORK_TIMES,
       ...(raw?.fixedWorkTimes ?? {}),

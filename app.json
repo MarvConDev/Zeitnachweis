@@ -2,18 +2,18 @@
   "expo": {
     "name": "Zeitnachweis",
     "slug": "zeitnachweis",
-    "version": "1.1.2",
+    "version": "1.1.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "de.zeitnachweis.app",
-      "buildNumber": "4"
+      "buildNumber": "6"
     },
     "android": {
       "package": "de.zeitnachweis.app",
-      "versionCode": 4,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png"

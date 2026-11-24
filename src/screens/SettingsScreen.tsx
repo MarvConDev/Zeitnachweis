@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { importBackupFile, saveBackupLocally, shareBackupFile } from '../backup';
 import { useTheme } from '../ThemeContext';
-import { loadProfile, updateProfileName } from '../storage';
+import { loadProfile, loadSettings, updateProfileName, updateSettings } from '../storage';
 import type { RootStackParamList } from '../types';
 import { ANDROID_VERSION_CODE, APP_VERSION } from '../version';
 
@@ -25,6 +25,7 @@ export function SettingsScreen({ navigation }: Props) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [personnelNumber, setPersonnelNumber] = useState('');
+  const [showWeekdayLabels, setShowWeekdayLabels] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const tapCount = useRef(0);
@@ -32,14 +33,20 @@ export function SettingsScreen({ navigation }: Props) {
 
   useEffect(() => {
     void (async () => {
-      const profile = await loadProfile();
+      const [profile, settings] = await Promise.all([loadProfile(), loadSettings()]);
       if (profile) {
         setFirstName(profile.firstName);
         setLastName(profile.lastName);
         setPersonnelNumber(profile.personnelNumber ?? '');
       }
+      setShowWeekdayLabels(settings.showWeekdayLabels);
     })();
   }, []);
+
+  async function onToggleWeekdayLabels(value: boolean) {
+    setShowWeekdayLabels(value);
+    await updateSettings((current) => ({ ...current, showWeekdayLabels: value }));
+  }
 
   async function onSaveName() {
     if (!firstName.trim() || !lastName.trim()) {
@@ -197,6 +204,22 @@ export function SettingsScreen({ navigation }: Props) {
             value={darkMode}
             onValueChange={(value) => {
               void setDarkMode(value);
+            }}
+            trackColor={{ false: colors.line, true: colors.accent }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <View style={[styles.row, { marginTop: 14 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Wochentage in der Tabelle</Text>
+            <Text style={styles.hint}>
+              Zeigt Mo, Di, Mi … vor der Tageszahl. Nicht im PDF-Export.
+            </Text>
+          </View>
+          <Switch
+            value={showWeekdayLabels}
+            onValueChange={(value) => {
+              void onToggleWeekdayLabels(value);
             }}
             trackColor={{ false: colors.line, true: colors.accent }}
             thumbColor="#FFFFFF"

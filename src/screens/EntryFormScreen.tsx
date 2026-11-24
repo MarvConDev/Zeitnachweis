@@ -70,32 +70,37 @@ function buildEntryForDay(
   const endTrim = end.trim();
   const objectTrim = objectText.trim();
 
-  if (!objectTrim && !(startTrim && endTrim)) {
+  // Objekt ist Pflicht; Zeiten sind optional (z. B. Urlaub), aber nur gemeinsam gültig.
+  if (!objectTrim) {
+    return null;
+  }
+  if ((startTrim || endTrim) && !(startTrim && endTrim)) {
     return null;
   }
 
   let duration = 0;
   let pause: number | undefined;
+  let startValue: string | undefined;
+  let endValue: string | undefined;
 
-  if (startTrim || endTrim) {
-    if (!(startTrim && endTrim)) {
-      return null;
-    }
+  if (startTrim && endTrim) {
     const calculated = calculateDurationHours(startTrim, endTrim, year, month, dayNumber);
     if (calculated === null) {
       return null;
     }
     duration = calculated;
-    pause = calculatePause(duration);
+    pause = calculatePause(calculated);
+    startValue = startTrim;
+    endValue = endTrim;
   }
 
   return {
     day: dayNumber,
-    start: startTrim || undefined,
-    end: endTrim || undefined,
+    start: startValue,
+    end: endValue,
     duration,
     pause,
-    object: objectTrim || undefined,
+    object: objectTrim,
   };
 }
 
@@ -269,12 +274,20 @@ export function EntryFormScreen({ navigation, route }: Props) {
   }
 
   async function onSave() {
-    if (!objectText.trim() && !(start.trim() && end.trim())) {
-      Alert.alert('Eingabe fehlt', 'Bitte Zeiten und/oder Objekt/Veranstaltung eintragen.');
+    if (!objectText.trim()) {
+      Alert.alert(
+        'Objekt fehlt',
+        'Bitte Objekt/Veranstaltung eintragen. Zeiten ohne Objekt sind nicht erlaubt.',
+      );
       return;
     }
 
-    if ((start.trim() || end.trim()) && !preview.valid) {
+    if ((start.trim() || end.trim()) && !(start.trim() && end.trim())) {
+      Alert.alert('Ungültige Zeit', 'Bitte Beginn und Ende zusammen als HH:MM eingeben.');
+      return;
+    }
+
+    if (start.trim() && end.trim() && !preview.valid) {
       Alert.alert('Ungültige Zeit', 'Bitte Beginn und Ende als HH:MM eingeben.');
       return;
     }
@@ -356,7 +369,7 @@ export function EntryFormScreen({ navigation, route }: Props) {
         <View style={styles.card}>
           <Text style={styles.title}>Eintrag bearbeiten</Text>
           <Text style={styles.subtitle}>
-            {MONTH_NAMES[month - 1]} {year} · Dauer inkl. Zeitumstellung · Pause automatisch
+            {MONTH_NAMES[month - 1]} {year} · Objekt Pflicht · Zeiten optional · Pause automatisch
           </Text>
 
           <Text style={styles.label}>Von</Text>

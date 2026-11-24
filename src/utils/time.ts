@@ -13,6 +13,13 @@ export const MONTH_NAMES = [
   'Dezember',
 ] as const;
 
+/** Wochentags-Kürzel, Index = Date.getDay() (0 = Sonntag). */
+export const WEEKDAY_SHORT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'] as const;
+
+export function weekdayShort(year: number, month: number, day: number): string {
+  return WEEKDAY_SHORT[new Date(year, month - 1, day).getDay()];
+}
+
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }

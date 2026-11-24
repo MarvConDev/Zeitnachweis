@@ -67,13 +67,13 @@ export function buildTimesheetHtml(
       margin-bottom: 4mm;
     }
     h1 {
-      font-size: 18px;
+      font-size: 26px;
       margin: 0;
       letter-spacing: 0.4px;
       line-height: 1.1;
     }
     .logo {
-      height: 14mm;
+      height: 20mm;
       width: auto;
       object-fit: contain;
     }
@@ -85,6 +85,7 @@ export function buildTimesheetHtml(
     .meta td {
       padding: 1.2mm 1.5mm;
       vertical-align: bottom;
+      font-size: 11px;
     }
     .label { font-weight: 600; width: 38mm; }
     .value { border-bottom: 1px solid #222; }
@@ -104,14 +105,14 @@ export function buildTimesheetHtml(
     }
     table.sheet th {
       background: #efefef;
-      font-size: 8px;
+      font-size: 9.5px;
       text-align: center;
       height: 5.4mm;
     }
-    .day { width: 11%; text-align: center; }
-    .num { text-align: center; width: 11%; }
-    .time { width: 12%; text-align: center; }
-    .obj { width: 43%; }
+    .day { width: 8%; text-align: center; }
+    .num { text-align: center; width: 9%; }
+    .time { width: 10%; text-align: center; }
+    .obj { width: 54%; }
     .sum-row td {
       font-weight: 700;
       background: #f7f7f7;
@@ -121,7 +122,7 @@ export function buildTimesheetHtml(
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
-      margin-top: 3.5mm;
+      margin-top: 12mm;
       gap: 8mm;
     }
     .footer {
@@ -167,7 +168,7 @@ export function buildTimesheetHtml(
         <th>Ende</th>
         <th>Dauer</th>
         <th>Pause</th>
-        <th>Objekt/Verantsaltung</th>
+        <th>Objekt/Veranstaltung</th>
       </tr>
     </thead>
     <tbody>
