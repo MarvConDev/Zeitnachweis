@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -124,6 +125,12 @@ export function EntryFormScreen({ navigation, route }: Props) {
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [ready, setReady] = useState(false);
   const [hasExistingEntry, setHasExistingEntry] = useState(false);
+  const [keyboardPad, setKeyboardPad] = useState(0);
+  const scrollRef = useRef<{ scrollTo: (options: { y: number; animated?: boolean }) => void } | null>(
+    null,
+  );
+  const objectFieldY = useRef(0);
+  const objectFocused = useRef(false);
 
   useEffect(() => {
     void (async () => {
@@ -172,6 +179,41 @@ export function EntryFormScreen({ navigation, route }: Props) {
       setReady(true);
     })();
   }, [initialDay, navigation, timesheetId]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardPad(event.endCoordinates.height);
+      if (objectFocused.current) {
+        setTimeout(scrollObjectFieldIntoView, 40);
+      }
+    });
+    const onHide = Keyboard.addListener(hideEvent, () => {
+      setKeyboardPad(0);
+    });
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, []);
+
+  function scrollObjectFieldIntoView() {
+    const targetY = Math.max(0, objectFieldY.current - 24);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    });
+  }
+
+  function onObjectFocus() {
+    objectFocused.current = true;
+    // Tastatur braucht kurz, bis die Höhe steht – dann Feld nach oben scrollen.
+    setTimeout(scrollObjectFieldIntoView, Platform.OS === 'ios' ? 50 : 180);
+  }
+
+  function onObjectBlur() {
+    objectFocused.current = false;
+  }
 
   const rangeFrom = Math.min(day, dayEnd);
   const rangeTo = Math.max(day, dayEnd);
@@ -357,14 +399,20 @@ export function EntryFormScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
       <ScrollView
+        ref={scrollRef as never}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) },
+          {
+            paddingBottom: Math.max(insets.bottom, 16) + (Platform.OS === 'android' ? keyboardPad : 0),
+          },
         ]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
       >
         <View style={styles.card}>
           <Text style={styles.title}>Eintrag bearbeiten</Text>
@@ -427,15 +475,24 @@ export function EntryFormScreen({ navigation, route }: Props) {
             </Pressable>
           </View>
 
-          <Text style={styles.label}>Objekt/Veranstaltung</Text>
-          <TextInput
-            style={[styles.input, styles.multiline]}
-            value={objectText}
-            onChangeText={setObjectText}
-            placeholder="Objekt/Veranstaltung"
-            placeholderTextColor={colors.muted}
-            multiline
-          />
+          <View
+            onLayout={(event) => {
+              objectFieldY.current = event.nativeEvent.layout.y;
+            }}
+          >
+            <Text style={styles.label}>Objekt/Veranstaltung</Text>
+            <TextInput
+              style={[styles.input, styles.multiline]}
+              value={objectText}
+              onChangeText={setObjectText}
+              onFocus={onObjectFocus}
+              onBlur={onObjectBlur}
+              placeholder="Objekt/Veranstaltung"
+              placeholderTextColor={colors.muted}
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
 
           {filteredSuggestions.length > 0 ? (
             <View style={styles.suggestions}>
@@ -524,7 +581,7 @@ export function EntryFormScreen({ navigation, route }: Props) {
 function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
-    scrollContent: { padding: 16, flexGrow: 1, justifyContent: 'center' },
+    scrollContent: { padding: 16, flexGrow: 1, justifyContent: 'flex-start' },
     card: {
       backgroundColor: colors.surface,
       borderRadius: 16,

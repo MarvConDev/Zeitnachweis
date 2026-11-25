@@ -14,6 +14,7 @@
     "android": {
       "package": "de.zeitnachweis.app",
       "versionCode": 6,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png"
