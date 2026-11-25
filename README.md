@@ -1,21 +1,41 @@
 # Zeitnachweis (Android)
 
-Android-App zum Ausfüllen von Stundenzetteln im Stil der Excel-Vorlage
+Android-App zum digitalen Ausfüllen von Stundenzetteln im Stil der Excel-Vorlage
 `Vorname_Nachname_Monat_Jahr.xlsx`.
+
+**Aktuell:** Version **1.1.4** · Android Build **6** · Package `de.zeitnachweis.app`  
+**Stack:** Expo SDK 58 / React Native · lokale Speicherung (AsyncStorage)
 
 ## Funktionen
 
-- Beim ersten Start: Vorname* / Name* (Pflichtfelder)
-- Liste aller erstellten Zeitnachweise
-- Neuen Zeitnachweis anlegen (Name + aktuelles Jahr vorausgefüllt, Monat wählen)
-- Ansehen der Monatstabelle
-- Bearbeiten: Datum, Beginn, Ende, Objekt/Veranstaltung, Verwerfen/Speichern
+### Erfassung
+- Ersteinrichtung: Vorname* / Name* (Pflicht), Personalnummer optional
+- Monate anlegen, ansehen, löschen (Langdruck)
+- Tageseinträge: Von/Bis-Zeitraum, Beginn, Ende, Objekt/Veranstaltung
+- Objekt ist Pflicht; Zeiten optional (z. B. Urlaub) — Zeiten ohne Objekt nicht erlaubt
 - Objekt-Vorschläge aus zuletzt genutzten Orten
-- Tag leeren (mit Bestätigung)
-- Dauer + Pause automatisch (`<10h → 0,5` / `≥10h → 0,75`)
-- PDF speichern/teilen (Logo, eine Seite)
-- Einstellungen: Name, Dark Mode, Backup/Restore, Versionsnummer
-- Daten bleiben bei App-Updates erhalten (Package `de.zeitnachweis.app`)
+- Tag/Zeitraum leeren (mit Bestätigung)
+- Dauer inkl. Sommer-/Winterzeit (Nachtschicht)
+- Pause automatisch (`<10h → 0,5` / `≥10h → 0,75`)
+
+### Tabelle & Export
+- Monatstabelle mit Zoom (2 Finger) und Verschieben (1 Finger, randbegrenzt)
+- Optional Wochentags-Kürzel (Mo, Di, …) — nur in der App, nicht im PDF
+- Heutiger Tag optisch hervorgehoben
+- PDF speichern oder teilen (eine Seite, Logo, Unterschrift)
+
+### Einstellungen
+- Profil (Name, Pers.-Nr.)
+- Dark Mode
+- Feste Arbeitszeiten (Vorbelegung in der Eintragsmaske)
+- Mindeststunden mit Ampel auf der Startseite
+- Objekt-Vorschläge bearbeiten/löschen
+- Backup lokal speichern, teilen oder wiederherstellen
+- Verstecktes Debug-Menü (8× auf die Versionsnummer tippen)
+
+### Persistenz
+- Daten bleiben bei App-Updates erhalten (gleiche App-ID + Signatur)
+- Vor Deinstallation oder Gerätewechsel: Backup in den Einstellungen
 
 ## Start mit Expo Go
 
@@ -31,40 +51,41 @@ npm start
 
 Nur LAN: `npm run start:lan`
 
-## Fertige APK / AAB bauen (EAS)
+Weitere Checks:
 
-1. Expo-Account anlegen: https://expo.dev/signup  
-2. Einloggen und Projekt verknüpfen:
+```bash
+npx tsc --noEmit
+npm run check:time
+npx expo-doctor
+```
+
+## Fertige APK / AAB bauen (EAS)
 
 ```bash
 npx eas-cli login
-npx eas-cli build:configure
+npm run build:apk   # Preview-APK (direkt installierbar)
+npm run build:aab   # Production-AAB (Google Play)
 ```
 
-3. Builds starten:
+Builds: https://expo.dev/accounts/matvcondev/projects/zeitnachweis  
+Repo: https://github.com/MarvConDev/Zeitnachweis
 
-```bash
-# APK zum direkten Installieren auf dem Handy
-npm run build:apk
+**Release 1.1.4 (Build 6):**  
+APK: https://expo.dev/artifacts/eas/MUXgXk1FyMDSb3veP-XPkDeQutt2G5RS049bSXplqj0.apk
 
-# AAB für Google Play
-npm run build:aab
-```
+APK installieren: Datei öffnen → ggf. „Unbekannte Apps“ erlauben.  
+Update: über die bestehende Installation installieren — lokale Daten bleiben erhalten.
 
-Nach dem Build: Download-Link in der Konsole / auf https://expo.dev/accounts/matvcondev/projects/zeitnachweis
-
-**Release 1.0.0 (Build 1):**
-- APK: https://expo.dev/artifacts/eas/S0kv1WkAaQErYgKjbwktkXjjGPaSS6mvvWuwSQ0bxw8.apk
-- AAB: https://expo.dev/artifacts/eas/bsVUNZzCOg7fniqGdfXsq9O8h_XxuGn1ylJ5faasYpQ.aab
-
-APK auf dem Handy installieren: Datei öffnen → „Unbekannte Apps“ erlauben falls gefragt.
-
-**Wichtig für Updates:** `android.package` (`de.zeitnachweis.app`) und Signatur nicht ändern – sonst gehen die lokalen Daten verloren. Vor großen Änderungen zusätzlich Backup in den Einstellungen.
+**Wichtig:** `android.package` (`de.zeitnachweis.app`) und Signatur nicht ändern.
 
 ## Projektstruktur
 
-- `src/screens` – UI-Screens
-- `src/utils/time.ts` – Dauer-/Pausenlogik
+- `App.tsx` / `index.ts` – Einstieg, Navigation, Splash
+- `src/screens` – UI (Home, Timesheet, EntryForm, Settings, …)
+- `src/components/ZoomablePanView.tsx` – Tabellen-Pan/Zoom
+- `src/utils/time.ts` – Dauer, Pause, Zeitumstellung, Wochentage
 - `src/pdf.ts` – PDF-Export
 - `src/storage.ts` / `src/backup.ts` – lokale Daten + Backup
+- `src/ThemeContext.tsx` – Light/Dark
+- `docs/` – Produktpräsentation (PDF)
 - `eas.json` – Build-Profile (preview=APK, production=AAB)
